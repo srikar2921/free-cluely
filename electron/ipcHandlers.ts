@@ -4,6 +4,11 @@ import { ipcMain, app } from "electron"
 import { AppState } from "./main"
 
 export function initializeIpcHandlers(appState: AppState): void {
+  // Automation handlers
+  ipcMain.handle('get-automation-status', () => appState.getAutomationStatus());
+  ipcMain.handle('set-automation-active', (event, isActive: boolean) => appState.setAutomationActive(isActive));
+  ipcMain.handle('set-automation-interval', (event, seconds: number) => appState.setAutomationInterval(seconds));
+
   ipcMain.handle(
     "update-content-dimensions",
     async (event, { width, height }: { width: number; height: number }) => {

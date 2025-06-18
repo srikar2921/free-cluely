@@ -23,6 +23,9 @@ export interface ElectronAPI {
   analyzeAudioFromBase64: (data: string, mimeType: string) => Promise<{ text: string; timestamp: number }>
   analyzeAudioFile: (path: string) => Promise<{ text: string; timestamp: number }>
   quitApp: () => Promise<void>
+  getAutomationStatus: () => Promise<{ isActive: boolean; interval: number }>;
+  setAutomationActive: (isActive: boolean) => Promise<void>;
+  setAutomationInterval: (seconds: number) => Promise<void>;
 }
 
 declare global {

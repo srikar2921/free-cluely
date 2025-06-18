@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react"
-import { IoLogOutOutline } from "react-icons/io5"
+import React, { useState, useEffect, useRef } from "react";
+import { IoLogOutOutline } from "react-icons/io5";
 
 interface QueueCommandsProps {
   onTooltipVisibilityChange: (visible: boolean, height: number) => void
@@ -10,35 +10,76 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   onTooltipVisibilityChange,
   screenshots
 }) => {
-  const [isTooltipVisible, setIsTooltipVisible] = useState(false)
-  const tooltipRef = useRef<HTMLDivElement>(null)
-  const [isRecording, setIsRecording] = useState(false)
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
-  const [audioResult, setAudioResult] = useState<string | null>(null)
-  const chunks = useRef<Blob[]>([])
+  const [isTooltipVisible, setIsTooltipVisible] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioResult, setAudioResult] = useState<string | null>(null);
+  const chunks = useRef<Blob[]>([]);
+
+  // Automation state
+  const [isAutomationActive, setIsAutomationActive] = useState(false);
+  const [automationInterval, setAutomationInterval] = useState(60); // Default interval
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
 
   useEffect(() => {
-    let tooltipHeight = 0
+    let tooltipHeight = 0;
     if (tooltipRef.current && isTooltipVisible) {
       tooltipHeight = tooltipRef.current.offsetHeight + 10
     }
-    onTooltipVisibilityChange(isTooltipVisible, tooltipHeight)
-  }, [isTooltipVisible])
+    onTooltipVisibilityChange(isTooltipVisible, tooltipHeight);
+  }, [isTooltipVisible]);
+
+  // Fetch initial automation status
+  useEffect(() => {
+    setIsLoadingStatus(true);
+    window.electronAPI.getAutomationStatus().then(status => {
+      setIsAutomationActive(status.isActive);
+      setAutomationInterval(status.interval);
+      setIsLoadingStatus(false);
+    }).catch(err => {
+      console.error("Error fetching automation status:", err);
+      setIsLoadingStatus(false);
+      // Handle error, maybe show a default state or an error message
+    });
+  }, []);
 
   const handleMouseEnter = () => {
-    setIsTooltipVisible(true)
-  }
+    setIsTooltipVisible(true);
+  };
 
   const handleMouseLeave = () => {
-    setIsTooltipVisible(false)
-  }
+    setIsTooltipVisible(false);
+  };
+
+  const handleAutomationToggle = async (newIsActive: boolean) => {
+    try {
+      await window.electronAPI.setAutomationActive(newIsActive);
+      setIsAutomationActive(newIsActive);
+    } catch (err) {
+      console.error("Error setting automation active state:", err);
+      // Optionally revert UI state or show error
+    }
+  };
+
+  const handleIntervalChange = async (newInterval: number) => {
+    if (newInterval > 0) {
+      try {
+        await window.electronAPI.setAutomationInterval(newInterval);
+        setAutomationInterval(newInterval);
+      } catch (err) {
+        console.error("Error setting automation interval:", err);
+        // Optionally revert UI state or show error
+      }
+    }
+  };
 
   const handleRecordClick = async () => {
     if (!isRecording) {
       // Start recording
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const recorder = new MediaRecorder(stream)
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream);
         recorder.ondataavailable = (e) => chunks.current.push(e.data)
         recorder.onstop = async () => {
           const blob = new Blob(chunks.current, { type: chunks.current[0]?.type || 'audio/webm' })
@@ -209,6 +250,37 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Separator */}
+        <div className="mx-2 h-4 w-px bg-white/20" />
+
+        {/* Automation Controls Section */}
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] leading-none text-white/70">Auto-Screenshot</span>
+          <input
+            type="checkbox"
+            checked={isAutomationActive}
+            onChange={(e) => handleAutomationToggle(e.target.checked)}
+            disabled={isLoadingStatus}
+            className="form-checkbox h-3.5 w-3.5 text-blue-500 bg-white/10 border-white/20 rounded focus:ring-blue-600 focus:ring-offset-0 focus:ring-1 cursor-pointer"
+          />
+          {isAutomationActive && (
+            <input
+              type="number"
+              value={automationInterval}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val)) handleIntervalChange(val);
+              }}
+              min="1"
+              disabled={isLoadingStatus}
+              className="bg-white/10 rounded-md px-1.5 py-0.5 text-[11px] w-12 text-center text-white/90 border border-transparent focus:border-white/30 focus:ring-0"
+            />
+          )}
+          <span className="text-[10px] text-white/60 w-28 text-left">
+            {isLoadingStatus ? "Loading..." : (isAutomationActive ? `Active (${automationInterval}s)` : "Off")}
+          </span>
         </div>
 
         {/* Separator */}

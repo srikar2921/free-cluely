@@ -4,6 +4,7 @@ import { WindowHelper } from "./WindowHelper"
 import { ScreenshotHelper } from "./ScreenshotHelper"
 import { ShortcutsHelper } from "./shortcuts"
 import { ProcessingHelper } from "./ProcessingHelper"
+import { AutomationHelper } from "./AutomationHelper"
 
 export class AppState {
   private static instance: AppState | null = null
@@ -12,6 +13,9 @@ export class AppState {
   private screenshotHelper: ScreenshotHelper
   public shortcutsHelper: ShortcutsHelper
   public processingHelper: ProcessingHelper
+  private automationHelper: AutomationHelper;
+  private isAutomationActive: boolean = false;
+  private automationIntervalSeconds: number = 60; // Default interval
 
   // View management
   private view: "queue" | "solutions" = "queue"
@@ -56,6 +60,9 @@ export class AppState {
 
     // Initialize ShortcutsHelper
     this.shortcutsHelper = new ShortcutsHelper(this)
+
+    // Initialize AutomationHelper
+    this.automationHelper = new AutomationHelper();
   }
 
   public static getInstance(): AppState {
@@ -183,6 +190,74 @@ export class AppState {
 
   public getHasDebugged(): boolean {
     return this.hasDebugged
+  }
+
+  // Automation methods
+  public getAutomationStatus(): { isActive: boolean; interval: number } {
+    return {
+      isActive: this.isAutomationActive,
+      interval: this.automationIntervalSeconds,
+    };
+  }
+
+  public setAutomationActive(isActive: boolean): void {
+    this.isAutomationActive = isActive;
+    if (isActive) {
+      this.automationHelper.start(
+        this.automationIntervalSeconds,
+        this.runAutomatedTask.bind(this)
+      );
+    } else {
+      this.automationHelper.stop();
+    }
+  }
+
+  public setAutomationInterval(seconds: number): void {
+    this.automationIntervalSeconds = seconds;
+    if (this.isAutomationActive) {
+      this.automationHelper.updateInterval(
+        seconds,
+        this.runAutomatedTask.bind(this)
+      );
+    }
+  }
+
+  private async runAutomatedTask(): Promise<void> {
+    if (!this.isAutomationActive) {
+      return;
+    }
+    console.log("Automation: Starting automated task...");
+    const previousView = this.getView(); // Store current view
+
+    try {
+      // Set view to 'queue' to ensure screenshot goes to the correct queue
+      // and processing follows the new problem path.
+      this.setView('queue');
+
+      await this.takeScreenshot();
+      console.log("Automation: Screenshot taken.");
+
+      await this.processingHelper.processScreenshots();
+      console.log("Automation: Screenshots processed.");
+
+      // Note: ProcessingHelper.processScreenshots (queue path) sets view to 'solutions'.
+      // No explicit view restoration to previousView is done here,
+      // as seeing the solution is often the desired outcome.
+    } catch (error) {
+      console.error("Automation: Error during automated task:", error);
+      // If an error occurred, it might be useful to restore the original view
+      // if the process didn't complete and change it.
+      // However, if processScreenshots() started and failed, view might already be 'solutions'.
+      // For now, we'll keep it simple and not restore, to avoid complex state juggling.
+      // this.setView(previousView); // Optional: consider implications
+    } finally {
+      console.log("Automation: Automated task finished.");
+      // If not restoring view in catch, and an error occurred before view change,
+      // view will remain 'queue'. If it occurred after, it might be 'solutions'.
+      // If it's critical to always return to previousView on error, then restore here or in catch.
+      // For now, let's assume the primary goal is that the processing attempt happens correctly.
+      // If an error occurs, the console log is the main feedback.
+    }
   }
 }
 
